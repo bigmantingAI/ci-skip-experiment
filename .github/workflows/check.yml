@@ -8,9 +8,30 @@ jobs:
     name: File Size
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    if: github.event.action != 'labeled' || github.event.label.name == 'file-size:override'
+    permissions:
+      checks: read
+      contents: read
     steps:
+      - name: Reuse this commit's earlier result for an irrelevant label
+        id: reuse
+        if: github.event.action == 'labeled' && github.event.label.name != 'file-size:override'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          prev=$(gh api "repos/$GITHUB_REPOSITORY/commits/$SHA/check-runs?check_name=File%20Size&per_page=100" \
+            --jq "[.check_runs[] | select(.status==\"completed\" and .conclusion!=\"skipped\" and (.details_url | contains(\"/runs/$RUN_ID/\") | not))] | sort_by(.completed_at) | last | .conclusion // \"none\"")
+          echo "earlier result: $prev"
+          echo "prev=$prev" >> "$GITHUB_OUTPUT"
+          case "$prev" in
+            success) exit 0 ;;
+            none) echo "no earlier result; running the check" ;;
+            *) exit 1 ;;
+          esac
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        if: steps.reuse.outputs.prev == '' || steps.reuse.outputs.prev == 'none'
         with:
           persist-credentials: false
-      - run: test ! -f FAIL
+      - if: steps.reuse.outputs.prev == '' || steps.reuse.outputs.prev == 'none'
+        run: test ! -f FAIL
