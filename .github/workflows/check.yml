@@ -1,0 +1,16 @@
+name: File Size
+on:
+  pull_request:
+    types: [opened, synchronize, labeled, unlabeled, edited]
+permissions: {}
+jobs:
+  file-size-limit:
+    name: File Size
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.event.action != 'labeled' || github.event.label.name == 'file-size:override'
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+      - run: test ! -f FAIL
